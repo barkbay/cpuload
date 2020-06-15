@@ -46,7 +46,7 @@ threads are still running.
 those heavy threads are not running.
 3. With 4 threads running, nr_periods still only grows by 50 in a 5 second
 period.
-4. The cpu-load reported reaches 1.0 with just one thread running and is capped
+4. The cpu-load reported reaches 1.0 with just 1-2 threads running and is capped
 to 1.0. Notice that cpu-quota is set to 400000 meaning the cpu load should have
 been 0.25.
 5. Once the heavy processing stops, the cpu load is very slow to drop.
