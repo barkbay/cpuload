@@ -1,0 +1,55 @@
+Test program demonstrating that OperatingSystemMXBean.getCpuLoad() has following
+issues in a container env:
+
+1. It is not returning "recent" usage, it returns avg "usage" since start of
+container
+2. It returns 1.0 when the container uses 1 core 100%, also with quota 4.0
+3. It does not really return avg cpu usage since start of container, it only
+returns average cpu usage of the cfs periods where the container had any threads
+ready to run.
+
+The definition of `nr_periods` is not easy to find, the kernel docs:
+https://www.kernel.org/doc/Documentation/scheduler/sched-bwc.txt
+says "Number of enforcement intervals that have elapsed".
+
+This blog post does clarify this further:
+https://engineering.indeedblog.com/blog/2019/12/unthrottled-fixing-cpu-limits-in-the-cloud/
+saying "number of periods that any thread in the cgroup was runnable".
+
+This matches precisely with the observations exposed by the enclosed program.
+
+The program can be run in docker using:
+
+docker build -t cpuload .
+docker run -v /sys/fs/cgroup:/sys/fs/cgroup --cpu-quota=400000 cpuload
+
+The program outputs the result of getCpuLoad together with the cgroup cpu.stat
+every 5 seconds. It gradually (with 5 seconds between each) starts 4 threads
+that all run cpu heavily for 20 seconds. So the program runs with following
+threads:
+
+0-5: no threads (or only the main/monitoring thread)
+5-10: 1 thread
+10-15: 2 threads
+15-20: 3 threads
+20-25: 4 threads
+25-30: 3 threads
+30-35: 2 threads
+35-40: 1 thread
+45-: only the main/monitoring thread
+
+A few observations to make:
+
+1. nr_periods grow by 50 each 5 second as long as at least one of the heavy
+threads are still running.
+2. nr_periods grow by some number smaller than 50 each 5 second period when
+those heavy threads are not running.
+3. With 4 threads running, nr_periods still only grows by 50 in a 5 second
+period.
+4. The cpu-load reported reaches 1.0 with just one thread running and is capped
+to 1.0. Notice that cpu-quota is set to 400000 meaning the cpu load should have
+been 0.25.
+5. Once the heavy processing stops, the cpu load is very slow to drop.
+
+These observations and reading the code leads to the conclusion on the 3 issues
+listed at the beginning of this READ file.
